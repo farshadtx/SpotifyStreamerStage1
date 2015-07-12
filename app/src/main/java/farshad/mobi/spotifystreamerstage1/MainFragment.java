@@ -1,38 +1,48 @@
 package farshad.mobi.spotifystreamerstage1;
 
-import android.app.Activity;
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
-import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.app.Fragment;
-import android.text.Editable;
-import android.text.TextWatcher;
+import android.view.KeyEvent;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.AdapterView;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 
 import farshad.mobi.spotifystreamerstage1.adapter.ArtistsAdapter;
+import farshad.mobi.spotifystreamerstage1.objects.ArtistObject;
+import farshad.mobi.spotifystreamerstage1.objects.TrackObject;
 import kaaes.spotify.webapi.android.SpotifyApi;
 import kaaes.spotify.webapi.android.SpotifyService;
 import kaaes.spotify.webapi.android.models.Artist;
 import kaaes.spotify.webapi.android.models.ArtistsPager;
+import kaaes.spotify.webapi.android.models.Track;
+import kaaes.spotify.webapi.android.models.Tracks;
 
 public class MainFragment extends Fragment {
 
     ListView lstArtists;
+    EditText txtSearch;
     SearchSpotifyTask spotifyTask;
-    ArrayList<Artist> arrayOfArtists;
+    ArrayList<ArtistObject> arrayOfArtists = new ArrayList<>();
+
     public MainFragment() {
         // Required empty public constructor
+    }
+
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        outState.putParcelableArrayList("arrayOfArtists", arrayOfArtists);
+        super.onSaveInstanceState(outState);
     }
 
     @Override
@@ -43,47 +53,49 @@ public class MainFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        // Inflate the layout for this fragment
+        if (savedInstanceState != null) {
+            arrayOfArtists = savedInstanceState.getParcelableArrayList("arrayOfArtists");
+        }
+
         getActivity().getActionBar().setDisplayHomeAsUpEnabled(false);
-        View view =  inflater.inflate(R.layout.fragment_main,
+        getActivity().getActionBar().setTitle(R.string.app_name);
+
+        View view = inflater.inflate(R.layout.fragment_main,
                 container, false);
+
         lstArtists = (ListView) view.findViewById(R.id.lst_artists);
         lstArtists.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> parent, View view, int position,
                                     long id) {
-                getFragmentManager().beginTransaction()
-                        .replace(R.id.content_fragment, ArtistFragment.newInstance(arrayOfArtists.get(position).id,arrayOfArtists.get(position).name,arrayOfArtists.get(position).images.get(arrayOfArtists.get(position).images.size() -1 ).url))
-                        .addToBackStack(null)
-                        .commit();
+                SearchSpotifyTask2 spotifyTask2 = new SearchSpotifyTask2();
+                spotifyTask2.execute(arrayOfArtists.get(position));
             }
         });
 
-        EditText txtSearch = (EditText) view.findViewById(R.id.search_bar);
-        txtSearch.addTextChangedListener(new TextWatcher() {
+        ArtistsAdapter adapter = new ArtistsAdapter(getActivity().getApplicationContext(), arrayOfArtists);
+        lstArtists.setAdapter(adapter);
+
+        txtSearch = (EditText) view.findViewById(R.id.search_bar);
+        txtSearch.setOnEditorActionListener(new TextView.OnEditorActionListener() {
             @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-                if (spotifyTask != null) {
-                    spotifyTask.cancel(false);
+            public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+                if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                    if (spotifyTask != null) {
+                        spotifyTask.cancel(false);
+                    }
+                    if (v.getText().length() > 0) {
+                        spotifyTask = new SearchSpotifyTask();
+                        spotifyTask.execute(v.getText().toString());
+                    } else {
+                        if (arrayOfArtists != null)
+                            arrayOfArtists.clear();
+                        lstArtists.setAdapter(null);
+                        Toast.makeText(getActivity().getApplicationContext(), R.string.search_error, Toast.LENGTH_SHORT).show();
+                    }
+                    getActivity().getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
                 }
-                if (s.length() > 0) {
-                    spotifyTask = new SearchSpotifyTask();
-                    spotifyTask.execute(s.toString());
-                } else {
-                    arrayOfArtists.clear();
-                    lstArtists.setAdapter(null);
-                    Toast.makeText(getActivity().getApplicationContext(), R.string.search_error, Toast.LENGTH_SHORT).show();
-                }
+                return false;
             }
         });
 
@@ -93,10 +105,9 @@ public class MainFragment extends Fragment {
     public class SearchSpotifyTask extends AsyncTask<String, Void, ArtistsPager> {
         @Override
         protected ArtistsPager doInBackground(String... strings) {
-
             SpotifyApi api = new SpotifyApi();
             SpotifyService spotify = api.getService();
-            HashMap queryMap = new HashMap();
+            HashMap<String, Object> queryMap = new HashMap<>();
             queryMap.put("limit", "10");
 
             return spotify.searchArtists(strings[0], queryMap);
@@ -104,15 +115,65 @@ public class MainFragment extends Fragment {
 
         @Override
         protected void onPostExecute(ArtistsPager artistsPager) {
+            if (arrayOfArtists != null) {
+                arrayOfArtists.clear();
+            } else {
+                arrayOfArtists = new ArrayList<>();
+            }
+            if (artistsPager.artists.items.size() > 0) {
+                for (int i = 0; i < artistsPager.artists.items.size(); i++) {
+                    Artist artist = artistsPager.artists.items.get(i);
 
-            if (artistsPager.artists.items.size()>0) {
-                arrayOfArtists = (ArrayList<Artist>) artistsPager.artists.items;
+                    ArtistObject objArtist = new ArtistObject(artist.id, artist.name, (artist.images.size() == 0) ? "" : artist.images.get(artist.images.size() - 1).url);
+
+                    arrayOfArtists.add(objArtist);
+                }
+
                 ArtistsAdapter adapter = new ArtistsAdapter(getActivity().getApplicationContext(), arrayOfArtists);
                 lstArtists.setAdapter(adapter);
             } else {
-                arrayOfArtists.clear();
+
                 lstArtists.setAdapter(null);
                 Toast.makeText(getActivity().getApplicationContext(), R.string.search_error, Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+    public class SearchSpotifyTask2 extends AsyncTask<ArtistObject, Void, Tracks> {
+
+        ArtistObject objArtist;
+
+        @Override
+        protected Tracks doInBackground(ArtistObject... params) {
+
+            objArtist = params[0];
+
+            SpotifyApi api = new SpotifyApi();
+            SpotifyService spotify = api.getService();
+            HashMap<String, Object> queryMap = new HashMap<>();
+            queryMap.put("limit", "10");
+            queryMap.put("country", "US");
+            return spotify.getArtistTopTrack(objArtist.Id, queryMap);
+        }
+
+        @Override
+        protected void onPostExecute(Tracks topTracks) {
+
+            if (topTracks.tracks.size() > 0) {
+                ArrayList<TrackObject> arrayOfTracks = new ArrayList<>();
+                for (int i = 0; i < topTracks.tracks.size(); i++) {
+                    Track track = topTracks.tracks.get(i);
+                    TrackObject objTrack = new TrackObject(track.id, track.name, track.album.name, (track.album.images.size() == 0) ? "" : track.album.images.get(track.album.images.size() - 1).url, track.preview_url);
+                    arrayOfTracks.add(objTrack);
+                }
+
+                getFragmentManager().beginTransaction()
+                        .replace(R.id.content_fragment, ArtistFragment.newInstance(objArtist,arrayOfTracks))
+                        .addToBackStack(null)
+                        .commit();
+
+            } else {
+                Toast.makeText(getActivity().getApplicationContext(), R.string.search_error_2, Toast.LENGTH_SHORT).show();
             }
         }
     }

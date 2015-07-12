@@ -13,16 +13,17 @@ import com.squareup.picasso.Picasso;
 import java.util.List;
 
 import farshad.mobi.spotifystreamerstage1.R;
-import kaaes.spotify.webapi.android.models.Artist;
+import farshad.mobi.spotifystreamerstage1.objects.ArtistObject;
 
-public class ArtistsAdapter extends ArrayAdapter<Artist> {
+public class ArtistsAdapter extends ArrayAdapter<ArtistObject> {
     Context mainContext;
+
     private static class ViewHolder {
         TextView name;
         ImageView image;
     }
 
-    public ArtistsAdapter(Context context, List<Artist> artists) {
+    public ArtistsAdapter(Context context, List<ArtistObject> artists) {
         super(context, 0, artists);
         mainContext = context;
     }
@@ -30,7 +31,7 @@ public class ArtistsAdapter extends ArrayAdapter<Artist> {
     @Override
     public View getView(int position, View artistRowView, ViewGroup parent) {
         // Get the data item for this position
-        Artist artist = getItem(position);
+        ArtistObject artist = getItem(position);
         ViewHolder viewHolder;
         if (artistRowView == null) {
             viewHolder = new ViewHolder();
@@ -42,14 +43,14 @@ public class ArtistsAdapter extends ArrayAdapter<Artist> {
         } else {
             viewHolder = (ViewHolder) artistRowView.getTag();
         }
-        viewHolder.name.setText(artist.name);
-        if (artist.images.size() == 0) {
+        viewHolder.name.setText(artist.Name);
+        if (artist.ThumbImage.equals("")) {
             viewHolder.image.setImageResource(R.drawable.singer_placeholder);
         } else {
             Picasso.with(mainContext)
-                    .load(artist.images.get(artist.images.size() - 1).url)
+                    .load(artist.ThumbImage)
                     .placeholder(R.drawable.singer_placeholder)
-                    .resize(50,50)
+                    .resize(50, 50)
                     .into(viewHolder.image);
         }
 
